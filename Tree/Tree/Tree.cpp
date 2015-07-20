@@ -13,10 +13,28 @@ typedef struct AVLNode{
 	AVLNode *lchild,*rchild;
 }AVLNode, *AVLTree;
 
+/*红黑树*/
+typedef enum Color{
+	RED = 0,
+	BLACK = 1
+}Color;
+
+typedef struct BRNode{
+	struct BRNode* parent;
+	struct BRNode* lchild;
+	struct BRNode* rchild;
+	int value;
+	Color color;
+}BRNode, *BRTree;
+
+BRTree nil = NULL;   /*避免讨论节点的边界情况，定义nil节点代替所有NULL*/
+
 void preOrderTraverse(BiTree T);
 void inOrderTraverse(BiTree T);
 void preOrderTraverse(AVLTree T);
 void inOrderTraverse(AVLTree T);
+void preOrderTraverse(BRTree T);
+void inOrderTraverse(BRTree T);
 bool Delete(BiTree &p);
 
 /*二叉查找树*/
@@ -36,9 +54,13 @@ void AVLRemove(AVLTree &p, int data);
 AVLTree FindNode(AVLTree p, int data);
 void CreateAVL(AVLTree &p, int *a, int len);
 
+/*红黑树*/
+void BRTreeInsert(BRTree &brTree, int value);
+void CreateBRTree(BRTree &T, int *a, int len);
+
 int main()
 {
-	int a[10] = {6, 7, 2, 1, 9, 8, 3, 0, 4, 5};
+	int a[10] = {6, 3, 2, 1, 7, 9, 8, 0, 4, 5};
 //	BiTree T;
 //	createBST(T,a,10);
 //	InsertBST(T,9);
@@ -52,14 +74,20 @@ int main()
 // 	std::cout << SearchBST(T,11,f,p);
 //	std::cout << p->data;
 
-	AVLTree T=NULL;
-	CreateAVL(T,a,10);
-	InsertAVL(T,10);
-	AVLRemove(T,6);
+// 	AVLTree T=NULL;
+// 	CreateAVL(T,a,10);
+// 	InsertAVL(T,10);
+// 	AVLRemove(T,6);
+// 	inOrderTraverse(T);
+// 	std::cout << std::endl;
+// 	preOrderTraverse(T);
+// 	AVLTree pT = FindNode(T,8);
+	BRTree T = NULL;
+	CreateBRTree(T,a,10);
+	preOrderTraverse(T);
+	std::cout << std::endl;
 	inOrderTraverse(T);
 	std::cout << std::endl;
-	preOrderTraverse(T);
-	AVLTree pT = FindNode(T,8);
 	std::cin.get();
 	std::cin.get();
 	return 0;
@@ -107,6 +135,15 @@ void preOrderTraverse(AVLTree T)
 	}
 }
 
+void preOrderTraverse(BRTree T)
+{
+	if(T){
+		std::cout << T->value << " ";
+		preOrderTraverse(T->lchild);
+		preOrderTraverse(T->rchild);
+	}
+}
+
 void inOrderTraverse(BiTree T)
 {
 	if(T){
@@ -120,6 +157,16 @@ void inOrderTraverse(AVLTree T)
 	if(T){
 		inOrderTraverse(T->lchild);
 		std::cout << T->data << " ";
+		inOrderTraverse(T->rchild);
+	}
+}
+
+void inOrderTraverse(BRTree T)
+{
+	if(T){
+		inOrderTraverse(T->lchild);
+		std::cout << T->value << " ";
+		std::cout << (T->color ? 'B' : 'R') << " ";
 		inOrderTraverse(T->rchild);
 	}
 }
@@ -466,3 +513,148 @@ void AVLRemove(AVLTree &p, int data)
 	p->hight = Max(Hight(p->lchild),Hight(p->rchild))+1;
 	return;
 }
+
+/*红黑树***********************************************************/
+/*每个节点要么是红色，要么是黑色***********************************/
+/*根节点是黑色的***************************************************/
+/*每个叶节点，空节点是黑色的***************************************/
+/*如果一个节点为红色，那么他的两个儿子都是黑色*********************/
+/*对每个节点，从该节点到其子孙节点的所有路径上包含相同数目的黑节点*/
+
+BRTree getRoot(BRTree T)
+{
+	while(T->parent)
+		T = T->parent;
+	return T;
+}
+
+void BRTreeLeftRotate(BRTree &brTree)
+{
+	BRTree rc = brTree->rchild;        /*记录节点的右孩子*/
+	BRTree p = brTree->parent;         /*记录节点的父亲*/
+	
+	brTree->parent = rc;
+	brTree->rchild = rc->lchild;       /*将节点的右孩子设置为节点右孩子的左孩子*/
+	if(rc->lchild != NULL){
+		rc->lchild->parent = brTree;   /*如果rc的左孩子非空，则设置其父亲为brTree*/
+	}
+
+	if(p){
+		if(p->lchild == brTree)
+			p->lchild =rc;
+		else
+			p->rchild = rc;
+	}
+
+	rc->lchild = brTree;
+	rc->parent = p;
+}
+
+void BRTreeRightRotate(BRTree &brTree)
+{
+	BRTree lc = brTree->lchild;
+	BRTree p = brTree->parent;
+
+	brTree->parent = lc;
+	brTree->lchild = lc->rchild;
+
+	if(lc->rchild != NULL){
+		lc->rchild->parent = brTree;
+	}
+
+	if(p){
+		if(p->lchild == brTree)
+			p->lchild = lc;
+		else
+			p->rchild = lc;
+	}
+
+	lc->rchild = brTree;
+	lc->parent = p;
+}
+
+/*插入节点后，要维持红黑树四条性质的不变性*/
+void BRInsertFixup(BRTree &T, BRTree z)
+{
+	BRTree Temp;
+	while(z->parent && z->parent->color == RED){    /*插入节点的父节点为红色，破坏红黑树的性质*/
+		if(z->parent->parent->lchild == z->parent){ /*判断z是否为父节点的左孩子*/
+			Temp = z->parent->parent->rchild;       /*Temp记录z的叔父节点*/
+				if(Temp && Temp->color == RED){
+					Temp->color = BLACK;
+					z->parent->color = BLACK;
+					z->parent->parent->color = RED;
+					z = z->parent->parent;
+				}
+				else{
+					if(z == z->parent->rchild){
+						z = z->parent;
+						BRTreeLeftRotate(z);
+					}
+					z->parent->color = BLACK;
+					z->parent->parent->color = RED;
+					BRTreeRightRotate(z->parent->parent);
+				}
+		}
+		else{
+			Temp = z->parent->parent->lchild;
+				if(Temp && Temp->color == RED){
+					z->parent->color = BLACK;
+					Temp->color = BLACK;
+					z->parent->parent->color = RED;
+					z = z->parent->parent;
+				}
+				else{
+					if(z == z->parent->lchild){
+						z = z->parent;
+						BRTreeRightRotate(z);
+					}
+					z->parent->color = BLACK;
+					z->parent->parent->color = RED;
+					BRTreeLeftRotate(z->parent->parent);
+				}
+		}
+	}
+	T = getRoot(z);
+	T->color = BLACK;
+}
+
+void BRTreeInsert(BRTree &brTree, int value)
+{
+	if(!brTree){
+		brTree = (BRTree)malloc(sizeof(BRNode));
+		brTree->parent = brTree->lchild = brTree->rchild = NULL;
+		brTree->color = BLACK;
+		brTree->value = value;
+	}
+	else{
+		BRTree x = brTree;     /*x保存当前顶点的父母节点*/
+		BRTree p = NULL;       /*p保存当前节点*/
+		while(x != NULL){
+			p = x;
+			if(value < x->value)
+				x = x->lchild;
+			else if(value > x->value)
+				x = x->rchild;
+			else
+				return;
+		}
+		x = (BRTree)malloc(sizeof(BRNode));
+		x->color = RED;
+		x->lchild = x->rchild = NULL;
+		x->parent = p;
+		x->value = value;
+		if(value < p->value)
+			p->lchild = x;
+		else
+			p->rchild = x;
+		BRInsertFixup(brTree, x);         /*插入后调整*/
+	}
+}
+
+void CreateBRTree(BRTree &T, int *a, int len)
+{
+	for(int i=0; i<len; i++)
+		BRTreeInsert(T,a[i]);
+}
+
